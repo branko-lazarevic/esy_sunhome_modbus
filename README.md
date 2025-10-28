@@ -20,9 +20,9 @@ ESP32-S3        RS485 Module        Inverter
 GPIO2 (TX)  --> TX/DI           
 GPIO1 (RX)  <-- RX/RO           
 5V          --> VCC                 
-GND         --> GND             --> GND
-                A/+ (RS485)     --> A/+
-                B/- (RS485)     --> B/-
+GND         --> GND                 
+                A/+ (RS485)     --> A/+ (PIN 5)
+                B/- (RS485)     --> B/- (PIN 4)
 ```
 
 ## Register Map
