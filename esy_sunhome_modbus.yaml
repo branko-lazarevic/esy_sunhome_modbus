@@ -153,38 +153,6 @@ sensor:
     icon: "mdi:battery"
     value_type: U_WORD
 
-  # Register 34 (Address 33) - Potential battery voltage
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r34_battery_voltage_candidate
-    name: "R34 Battery Voltage?"
-    register_type: read
-    address: 33
-    unit_of_measurement: "V"
-    device_class: voltage
-    state_class: measurement
-    value_type: U_WORD
-    filters:
-      - multiply: 0.1
-    accuracy_decimals: 1
-    internal: true  # Hidden until confirmed
-
-  # Register 35 (Address 34) - Potential battery current
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r35_battery_current_candidate
-    name: "R35 Battery Current?"
-    register_type: read
-    address: 34
-    unit_of_measurement: "A"
-    device_class: current
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-    accuracy_decimals: 2
-    internal: true  # Hidden until confirmed
-
   # ============================================================
   # SOLAR / PV REGISTERS (Input Registers)
   # ============================================================
@@ -214,39 +182,7 @@ sensor:
     state_class: measurement
     icon: "mdi:solar-panel"
     value_type: U_WORD
-
-  # Register 24 (Address 23) - Potential PV1 Voltage
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r24_pv1_voltage_candidate
-    name: "R24 PV1 Voltage?"
-    register_type: read
-    address: 23
-    unit_of_measurement: "V"
-    device_class: voltage
-    state_class: measurement
-    value_type: U_WORD
-    filters:
-      - multiply: 0.1
-    accuracy_decimals: 1
-    internal: true
-
-  # Register 27 (Address 26) - Potential PV2 Voltage
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r27_pv2_voltage_candidate
-    name: "R27 PV2 Voltage?"
-    register_type: read
-    address: 26
-    unit_of_measurement: "V"
-    device_class: voltage
-    state_class: measurement
-    value_type: U_WORD
-    filters:
-      - multiply: 0.1
-    accuracy_decimals: 1
-    internal: true
-
+    
   # ============================================================
   # GRID REGISTERS (Input Registers)
   # ============================================================
@@ -311,22 +247,6 @@ sensor:
       - multiply: 0.01
     accuracy_decimals: 2
 
-  # Register 51 (Address 50) - Potential Grid Current
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r51_grid_current_candidate
-    name: "R51 Grid Current?"
-    register_type: read
-    address: 50
-    unit_of_measurement: "A"
-    device_class: current
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.01
-    accuracy_decimals: 2
-    internal: true
-
   # ============================================================
   # LOAD REGISTERS (Input Registers)
   # ============================================================
@@ -343,22 +263,6 @@ sensor:
     state_class: measurement
     icon: "mdi:home-lightning-bolt"
     value_type: U_WORD
-
-  # Register 92 (Address 91) - Potential Load Current
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r92_load_current_candidate
-    name: "R92 Load Current?"
-    register_type: read
-    address: 91
-    unit_of_measurement: "A"
-    device_class: current
-    state_class: measurement
-    value_type: U_WORD
-    filters:
-      - multiply: 0.01
-    accuracy_decimals: 2
-    internal: true
 
   # ============================================================
   # INVERTER STATUS REGISTERS (Input Registers)
@@ -394,38 +298,6 @@ sensor:
       - multiply: 0.1
     accuracy_decimals: 1
 
-  # Register 77 (Address 76) - Potential Inverter Temperature
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r77_inverter_temp_candidate
-    name: "R77 Inverter Temp?"
-    register_type: read
-    address: 76
-    unit_of_measurement: "°C"
-    device_class: temperature
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.1
-    accuracy_decimals: 1
-    internal: true
-
-  # Register 78 (Address 77) - Potential Battery Temperature
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: r78_battery_temp_candidate
-    name: "R78 Battery Temp?"
-    register_type: read
-    address: 77
-    unit_of_measurement: "°C"
-    device_class: temperature
-    state_class: measurement
-    value_type: S_WORD
-    filters:
-      - multiply: 0.1
-    accuracy_decimals: 1
-    internal: true
-
   # ============================================================
   # HOLDING REGISTERS (Energy Counters)
   # ============================================================
@@ -445,23 +317,6 @@ sensor:
     accuracy_decimals: 3
     filters:
       - multiply: 0.001
-
-  # Register 32-33 (Address 31-32) - Potential Total Energy Generated (32-bit)
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: total_generation_candidate
-    name: "Total Energy Generated?"
-    register_type: holding
-    address: 31
-    register_count: 2
-    unit_of_measurement: "kWh"
-    device_class: energy
-    state_class: total_increasing
-    value_type: U_DWORD
-    accuracy_decimals: 1
-    filters:
-      - multiply: 0.1
-    internal: true
 
   # ============================================================
   # CALCULATED SENSORS
