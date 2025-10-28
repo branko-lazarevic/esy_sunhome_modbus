@@ -39,27 +39,19 @@ These registers are read-only and contain real-time measurements.
 | R29 | 28 | Battery Mode | UINT16 | - | 1 | 0=Unknown, 1=Charging, 2=Topping, 3=Unknown, 4=Full, 5=Discharging |
 | R32 | 31 | Battery Power | INT16 | W | 1 | Positive=Charging, Negative=Discharging |
 | R33 | 32 | Battery SOC | UINT16 | % | 1 | State of Charge (0-100%) |
-| R34 | 33 | Battery Voltage? | UINT16 | V | 0.1 | Candidate - needs verification |
-| R35 | 34 | Battery Current? | INT16 | A | 0.01 | Candidate - needs verification |
 | **SOLAR / PV** |
 | R23 | 22 | PV1 Power | UINT16 | W | 1 | Solar Panel String 1 Power |
 | R26 | 25 | PV2 Power | UINT16 | W | 1 | Solar Panel String 2 Power |
-| R24 | 23 | PV1 Voltage? | UINT16 | V | 0.1 | Candidate - needs verification |
-| R27 | 26 | PV2 Voltage? | UINT16 | V | 0.1 | Candidate - needs verification |
 | **GRID** |
 | R40 | 39 | Grid Frequency | UINT16 | Hz | 0.01 | AC Grid Frequency (e.g., 5000 = 50.00 Hz) |
 | R43 | 42 | Grid AC Voltage | UINT16 | V | 0.1 | AC Grid Voltage (e.g., 2300 = 230.0V) |
 | R50 | 49 | Grid Power | INT16 | W | 1 | Positive=Import, Negative=Export |
-| R51 | 50 | Grid Current? | INT16 | A | 0.01 | Candidate - needs verification |
 | R55 | 54 | Grid Frequency Alt | UINT16 | Hz | 0.01 | Alternate frequency reading |
 | **LOAD** |
 | R91 | 90 | Load Power | UINT16 | W | 1 | Total household load power |
-| R92 | 91 | Load Current? | UINT16 | A | 0.01 | Candidate - needs verification |
 | **INVERTER STATUS** |
 | R58 | 57 | External PV AC Voltage | UINT16 | V | 0.1 | External AC voltage reading |
 | R76 | 75 | Internal PV AC Voltage | UINT16 | V | 0.1 | Internal AC voltage reading |
-| R77 | 76 | Inverter Temp? | INT16 | °C | 0.1 | Candidate - needs verification |
-| R78 | 77 | Battery Temp? | INT16 | °C | 0.1 | Candidate - needs verification |
 
 ### Holding Registers (Function Code 3)
 
@@ -68,7 +60,6 @@ These registers may be read/write and typically contain configuration or累积 v
 | Register | Address | Name | Type | Unit | Scale | Description |
 |----------|---------|------|------|------|-------|-------------|
 | R31 | 30 | Daily Power Generation | UINT16 | kWh | 0.001 | Daily solar generation (resets daily) |
-| R32-33 | 31-32 | Total Energy Generated? | UINT32 | kWh | 0.1 | Lifetime generation (32-bit) - candidate |
 
 ## Sensors Provided
 
