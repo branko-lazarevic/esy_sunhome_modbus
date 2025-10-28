@@ -1,0 +1,732 @@
+substitutions:
+  device_name: esy-sunhome-hm6
+  friendly_name: "ESY Sunhome HM6"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+  baud_rate: 0  # Disable UART logging since we're using UART for Modbus
+  logs:
+    modbus_controller: DEBUG
+    modbus: DEBUG
+    uart: DEBUG
+
+# API, comment out if using MQTT
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+# mqtt:
+#   broker: !secret mqtt_host
+#   username: !secret mqtt_username
+#   password: !secret mqtt_password
+  
+captive_portal:
+
+# Configure UART for RS485 communication
+uart:
+  id: modbus_uart
+  tx_pin: GPIO2 
+  rx_pin: GPIO1
+  baud_rate: 9600
+  parity: NONE
+  stop_bits: 1
+
+# Configure Modbus
+modbus:
+  id: mbus
+  uart_id: modbus_uart
+  # If your M5 Isolated RS485 is NOT auto-direction, uncomment and set a GPIO:
+  # flow_control_pin: GPIO5
+
+# Global variable for update interval
+globals:
+  - id: update_interval_ms
+    type: int
+    restore_value: yes
+    initial_value: '10000'
+
+modbus_controller:
+  - id: sunhome
+    modbus_id: mbus
+    address: 0x01  # Modbus slave address
+    setup_priority: -10
+    update_interval: 10s  # Default, will be overridden
+    command_throttle: 10ms
+
+text_sensor:
+  - platform: template
+    id: battery_mode
+    name: "Battery Mode"
+    icon: "mdi:battery"
+    update_interval: never
+    lambda: |-
+      return {};
+  
+  # WiFi Info
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+    ssid:
+      name: "${friendly_name} SSID"
+
+  # ESPHome Version
+  - platform: version
+    name: "${friendly_name} ESPHome Version"
+    hide_timestamp: true
+sensor:
+  # ============================================================
+  # BATTERY REGISTERS (Input Registers)
+  # ============================================================
+
+  # Register 29 (Address 28) - Battery Mode Code
+  # 0=Unknown, 1=Charging, 2=Charge Topping, 3=Unknown, 4=Full, 5=Discharging
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    internal: true
+    id: battery_code
+    name: "Battery Code"
+    register_type: read
+    address: 28
+    value_type: U_WORD
+    accuracy_decimals: 0
+    on_value:
+      then:
+        - lambda: |-
+            int mode = (int) x;
+            std::string s;
+            switch (mode) {
+              case 0:  s = "Unknown"; break;
+              case 1:  s = "Charging"; break;
+              case 2:  s = "Charge Topping"; break;
+              case 3:  s = "Unknown"; break;
+              case 4:  s = "Full"; break;
+              case 5:  s = "Discharging"; break;
+              default: {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "Unknown (%d)", mode);
+                s = buf;
+              }
+            }
+            id(battery_mode).publish_state(s.c_str());
+
+  # Register 32 (Address 31) - Battery Power (Signed for charge/discharge)
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: battery_power
+    name: "Battery Power"
+    register_type: read
+    address: 31
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:battery-charging"
+    value_type: S_WORD
+
+  # Register 33 (Address 32) - Battery State of Charge
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: battery_soc
+    name: "Battery SOC"
+    register_type: read
+    address: 32
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
+    icon: "mdi:battery"
+    value_type: U_WORD
+
+  # Register 34 (Address 33) - Potential battery voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r34_battery_voltage_candidate
+    name: "R34 Battery Voltage?"
+    register_type: read
+    address: 33
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+    internal: true  # Hidden until confirmed
+
+  # Register 35 (Address 34) - Potential battery current
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r35_battery_current_candidate
+    name: "R35 Battery Current?"
+    register_type: read
+    address: 34
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+    accuracy_decimals: 2
+    internal: true  # Hidden until confirmed
+
+  # ============================================================
+  # SOLAR / PV REGISTERS (Input Registers)
+  # ============================================================
+
+  # Register 23 (Address 22) - PV1 Power
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: pv1_power
+    name: "PV1 Power"
+    register_type: read
+    address: 22
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:solar-panel"
+    value_type: U_WORD
+
+  # Register 26 (Address 25) - PV2 Power
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: pv2_power
+    name: "PV2 Power"
+    register_type: read
+    address: 25
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:solar-panel"
+    value_type: U_WORD
+
+  # Register 24 (Address 23) - Potential PV1 Voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r24_pv1_voltage_candidate
+    name: "R24 PV1 Voltage?"
+    register_type: read
+    address: 23
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+    internal: true
+
+  # Register 27 (Address 26) - Potential PV2 Voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r27_pv2_voltage_candidate
+    name: "R27 PV2 Voltage?"
+    register_type: read
+    address: 26
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+    internal: true
+
+  # ============================================================
+  # GRID REGISTERS (Input Registers)
+  # ============================================================
+
+  # Register 40 (Address 39) - Grid Frequency
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: grid_frequency
+    name: "Grid Frequency"
+    register_type: read
+    address: 39
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+    icon: "mdi:sine-wave"
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+    accuracy_decimals: 2
+
+  # Register 43 (Address 42) - Grid AC Voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: grid_voltage
+    name: "Grid AC Voltage"
+    register_type: read
+    address: 42
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    icon: "mdi:flash"
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+
+  # Register 50 (Address 49) - Grid Power (Signed: positive=import, negative=export)
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: grid_power
+    name: "Grid Power"
+    register_type: read
+    address: 49
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:transmission-tower"
+    value_type: S_WORD
+
+  # Register 55 (Address 54) - Grid Frequency Alt
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: grid_frequency_alt
+    name: "Grid Frequency Alt"
+    register_type: read
+    address: 54
+    unit_of_measurement: "Hz"
+    device_class: frequency
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+    accuracy_decimals: 2
+
+  # Register 51 (Address 50) - Potential Grid Current
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r51_grid_current_candidate
+    name: "R51 Grid Current?"
+    register_type: read
+    address: 50
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.01
+    accuracy_decimals: 2
+    internal: true
+
+  # ============================================================
+  # LOAD REGISTERS (Input Registers)
+  # ============================================================
+
+  # Register 91 (Address 90) - Load Power
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: load_power
+    name: "Load Power"
+    register_type: read
+    address: 90
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:home-lightning-bolt"
+    value_type: U_WORD
+
+  # Register 92 (Address 91) - Potential Load Current
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r92_load_current_candidate
+    name: "R92 Load Current?"
+    register_type: read
+    address: 91
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.01
+    accuracy_decimals: 2
+    internal: true
+
+  # ============================================================
+  # INVERTER STATUS REGISTERS (Input Registers)
+  # ============================================================
+
+  # Register 58 (Address 57) - External PV AC Voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: ext_pv_voltage
+    name: "External PV AC Voltage"
+    register_type: read
+    address: 57
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+
+  # Register 76 (Address 75) - Internal PV AC Voltage
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: int_pv_voltage
+    name: "Internal PV AC Voltage"
+    register_type: read
+    address: 75
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    value_type: U_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+
+  # Register 77 (Address 76) - Potential Inverter Temperature
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r77_inverter_temp_candidate
+    name: "R77 Inverter Temp?"
+    register_type: read
+    address: 76
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+    internal: true
+
+  # Register 78 (Address 77) - Potential Battery Temperature
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: r78_battery_temp_candidate
+    name: "R78 Battery Temp?"
+    register_type: read
+    address: 77
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    value_type: S_WORD
+    filters:
+      - multiply: 0.1
+    accuracy_decimals: 1
+    internal: true
+
+  # ============================================================
+  # HOLDING REGISTERS (Energy Counters)
+  # ============================================================
+
+  # Register 31 (Address 30) - Daily Power Generation
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: daily_generation
+    name: "Daily Power Generation"
+    register_type: holding
+    address: 30
+    unit_of_measurement: "kWh"
+    icon: "mdi:counter"
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_WORD
+    accuracy_decimals: 3
+    filters:
+      - multiply: 0.001
+
+  # Register 32-33 (Address 31-32) - Potential Total Energy Generated (32-bit)
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: total_generation_candidate
+    name: "Total Energy Generated?"
+    register_type: holding
+    address: 31
+    register_count: 2
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD
+    accuracy_decimals: 1
+    filters:
+      - multiply: 0.1
+    internal: true
+
+  # ============================================================
+  # CALCULATED SENSORS
+  # ============================================================
+
+  # Total PV Power
+  - platform: template
+    name: "Total PV Power"
+    id: total_pv_power
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:solar-power"
+    lambda: |-
+      return id(pv1_power).state + id(pv2_power).state;
+    update_interval: 10s
+
+  # Net Power Flow (positive = consuming from grid, negative = exporting)
+  - platform: template
+    name: "Net Power Flow"
+    id: net_power_flow
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:transmission-tower-export"
+    lambda: |-
+      float pv = id(pv1_power).state + id(pv2_power).state;
+      float battery = id(battery_power).state;
+      float load = id(load_power).state;
+      float grid = id(grid_power).state;
+      return grid;  // Positive = import, Negative = export
+    update_interval: 10s
+
+  # Battery Charge/Discharge Power (absolute value with sign indication)
+  - platform: template
+    name: "Battery Power Flow"
+    id: battery_power_flow
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    icon: "mdi:battery-sync"
+    lambda: |-
+      return id(battery_power).state;
+    update_interval: 10s
+
+  # Self-Consumption Percentage
+  - platform: template
+    name: "Self Consumption"
+    id: self_consumption
+    unit_of_measurement: "%"
+    icon: "mdi:percent"
+    lambda: |-
+      float pv = id(pv1_power).state + id(pv2_power).state;
+      float grid = id(grid_power).state;
+      if (pv <= 0) return 0;
+      float consumed = pv - (grid < 0 ? abs(grid) : 0);  // PV minus export
+      return (consumed / pv) * 100.0;
+    update_interval: 10s
+    accuracy_decimals: 1
+
+  # ============================================================
+  # INTEGRATION SENSORS (Energy Tracking for Home Assistant)
+  # ============================================================
+
+  # PV1 Energy
+  - platform: integration
+    id: pv1_energy
+    name: "PV1 Energy"
+    sensor: pv1_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:solar-power"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  # PV2 Energy
+  - platform: integration
+    id: pv2_energy
+    name: "PV2 Energy"
+    sensor: pv2_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:solar-power"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  # Total PV Energy
+  - platform: integration
+    id: total_pv_energy
+    name: "Total PV Energy"
+    sensor: total_pv_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:solar-power"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  # Load Energy Consumption
+  - platform: integration
+    id: load_energy
+    name: "Load Energy"
+    sensor: load_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:home-lightning-bolt"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      # Multiplication factor from W to kW is 0.001
+      - multiply: 0.001
+
+  # Grid Import Energy (only when positive)
+  - platform: integration
+    id: grid_import_energy
+    name: "Grid Import Energy"
+    sensor: grid_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:transmission-tower-import"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      - lambda: return max(0.0f, x);  # Only count positive (import)
+      - multiply:  0.001
+          
+
+  # Grid Export Energy (only when negative, converted to positive)
+  - platform: integration
+    id: grid_export_energy
+    name: "Grid Export Energy"
+    sensor: grid_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:transmission-tower-export"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      - lambda: return max(0.0f, -x);  # Only count negative (export), make positive
+      - multiply: 0.001
+
+  # Battery Charge Energy (only when charging)
+  - platform: integration
+    id: battery_charge_energy
+    name: "Battery Charge Energy"
+    sensor: battery_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:battery-charging"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      - lambda: return max(0.0f, x);  # Only count positive (charging)
+      - multiply: 0.001
+
+  # Battery Discharge Energy (only when discharging)
+  - platform: integration
+    id: battery_discharge_energy
+    name: "Battery Discharge Energy"
+    sensor: battery_power
+    time_unit: h
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:battery-arrow-down"
+    restore: true
+    accuracy_decimals: 3
+    filters:
+      - lambda: return max(0.0f, -x);  # Only count negative (discharge), make positive
+      - multiply: 0.001
+  
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+    icon: "mdi:clock-outline"
+
+  # WiFi Signal
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+
+# ============================================================
+# BUTTONS
+# ============================================================
+
+button:
+  - platform: template
+    name: "Update Now"
+    icon: "mdi:refresh"
+    on_press:
+      - component.update: sunhome
+
+  - platform: template
+    name: "Clear Energy Counters"
+    icon: "mdi:refresh"
+    on_press:
+      - lambda: |-
+          id(pv1_energy).publish_state(0);
+          id(pv2_energy).publish_state(0);
+          id(total_pv_energy).publish_state(0);
+          id(load_energy).publish_state(0);
+          id(grid_import_energy).publish_state(0);
+          id(grid_export_energy).publish_state(0);
+          id(battery_charge_energy).publish_state(0);
+          id(battery_discharge_energy).publish_state(0);
+
+  - platform: restart
+    name: "${friendly_name} Restart"
+    icon: "mdi:restart"
+
+# ============================================================
+# SELECT FOR UPDATE INTERVAL (FIXED VERSION)
+# ============================================================
+
+select:
+  - platform: template
+    name: "${friendly_name} Update Interval"
+    id: update_interval_select
+    icon: "mdi:timer"
+    optimistic: true
+    options:
+      - "2 seconds"
+      - "5 seconds"
+      - "10 seconds"
+      - "15 seconds"
+      - "30 seconds"
+    initial_option: "10 seconds"
+    restore_value: true
+    on_value:
+      then:
+        - lambda: |-
+            int interval_ms = 10000;
+            std::string selected = x;
+            
+            if (selected == "2 seconds") interval_ms = 2000;
+            else if (selected == "5 seconds") interval_ms = 5000;
+            else if (selected == "10 seconds") interval_ms = 10000;
+            else if (selected == "15 seconds") interval_ms = 15000;
+            else if (selected == "30 seconds") interval_ms = 30000;
+            
+            id(update_interval_ms) = interval_ms;
+            id(sunhome).set_update_interval(interval_ms);
+            id(self_consumption).set_update_interval(interval_ms);
+            id(battery_power_flow).set_update_interval(interval_ms);
+            id(net_power_flow).set_update_interval(interval_ms);
+            id(total_pv_power).set_update_interval(interval_ms);
+            ESP_LOGI("main", "Update interval changed to %d ms", interval_ms);
