@@ -55,7 +55,7 @@ These registers are read-only and contain real-time measurements.
 
 ### Holding Registers (Function Code 3)
 
-These registers may be read/write and typically contain configuration or累积 values.
+These registers may be read/write and typically contain configuration or accumulation values.
 
 | Register | Address | Name | Type | Unit | Scale | Description |
 |----------|---------|------|------|------|-------|-------------|
