@@ -458,7 +458,7 @@ sensor:
     restore: true
     accuracy_decimals: 3
     filters:
-      - lambda: return max(0.0f, x);  # Only count positive (import)
+      - lambda: return max(0.0f, -x);  # Only count negative (export), make positive
       - multiply:  0.001
           
 
@@ -475,7 +475,7 @@ sensor:
     restore: true
     accuracy_decimals: 3
     filters:
-      - lambda: return max(0.0f, -x);  # Only count negative (export), make positive
+      - lambda: return max(0.0f, x);  # Only count positive (import)
       - multiply: 0.001
 
   # Battery Charge Energy (only when charging)
