@@ -13,6 +13,8 @@ If, like me, you're switching to Amber for wholesale rates, use my code QVLA4DT4
 - **120Ω resistance** 120Ω Termination Resistor
 - **Inverter**: ESY Sunhome HM6 Inverter
 
+![Hardware](/hardware.png)
+
 ### Wiring
 
 ```
