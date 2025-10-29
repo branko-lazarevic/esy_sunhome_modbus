@@ -35,21 +35,21 @@ These registers are read-only and contain real-time measurements.
 
 | Register | Address | Name | Type | Unit | Scale | Description |
 |----------|---------|------|------|------|-------|-------------|
-| **BATTERY** |
+| **BATTERY**             |
 | R29 | 28 | Battery Mode | UINT16 | - | 1 | 0=Unknown, 1=Charging, 2=Topping, 3=Unknown, 4=Full, 5=Discharging |
 | R32 | 31 | Battery Power | INT16 | W | 1 | Positive=Charging, Negative=Discharging |
 | R33 | 32 | Battery SOC | UINT16 | % | 1 | State of Charge (0-100%) |
 | **SOLAR / PV** |
 | R23 | 22 | PV1 Power | UINT16 | W | 1 | Solar Panel String 1 Power |
 | R26 | 25 | PV2 Power | UINT16 | W | 1 | Solar Panel String 2 Power |
-| **GRID** |
+| **GRID**             |
 | R40 | 39 | Grid Frequency | UINT16 | Hz | 0.01 | AC Grid Frequency (e.g., 5000 = 50.00 Hz) |
 | R43 | 42 | Grid AC Voltage | UINT16 | V | 0.1 | AC Grid Voltage (e.g., 2300 = 230.0V) |
 | R50 | 49 | Grid Power | INT16 | W | 1 | Positive=Import, Negative=Export |
 | R55 | 54 | Grid Frequency Alt | UINT16 | Hz | 0.01 | Alternate frequency reading |
-| **LOAD** |
+| **LOAD**             |
 | R91 | 90 | Load Power | UINT16 | W | 1 | Total household load power |
-| **INVERTER STATUS** |
+| **INVERTER STATUS**             |
 | R58 | 57 | External PV AC Voltage | UINT16 | V | 0.1 | External AC voltage reading |
 | R76 | 75 | Internal PV AC Voltage | UINT16 | V | 0.1 | Internal AC voltage reading |
 
