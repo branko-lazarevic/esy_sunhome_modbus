@@ -12,6 +12,7 @@ If, like me, you're switching to Amber for wholesale rates, use my code QVLA4DT4
 - [**M5Stack Isolated RS485 Unit**](https://shop.m5stack.com/products/isolated-rs485-unit) (or similar RS485 to UART converter)
 - **120Ω resistance** 120Ω Termination Resistor
 - **Inverter**: ESY Sunhome HM6 Inverter
+- **USB Power Source**: Do NOT power the S3 from the USB port on the Inverter, this is a communications port and may cause problems for the inverter
 
 ![Hardware](/hardware.png)
 
