@@ -61,17 +61,25 @@ globals:
   - id: update_interval_ms
     type: int
     restore_value: yes
-    initial_value: '10000'
+    initial_value: '15000'
 
 modbus_controller:
   - id: sunhome
     modbus_id: mbus
     address: 0x01  # Modbus slave address
     setup_priority: -10
-    update_interval: 10s  # Default, will be overridden
+    update_interval: 5s # Default, will be overridden
     command_throttle: 10ms
 
 text_sensor:
+  - platform: template
+    id: operating_mode
+    name: "Operating Mode"
+    icon: "mdi:battery"
+    update_interval: never
+    lambda: |-
+      return {};
+
   - platform: template
     id: battery_mode
     name: "Battery Mode"
@@ -91,10 +99,83 @@ text_sensor:
   - platform: version
     name: "${friendly_name} ESPHome Version"
     hide_timestamp: true
+
 sensor:
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    id: scan_hold_modes
+    name: "Scan HOLD 20-39"
+    address: 20
+    register_type: holding
+    register_count: 20      # 20–39
+    value_type: U_WORD
+    skip_updates: 0
+    lambda: |-
+      static uint16_t last_vals[20];
+      static bool init = false;
+
+      const uint8_t interesting[] = {
+        23, 24, 30, 32
+      };
+
+      auto is_interesting = [&](uint16_t reg) -> bool {
+        for (auto addr : interesting) {
+          if (reg == addr) return true;
+        }
+        return false;
+      };
+
+      int reg_count = data.size() / 2;
+      if (reg_count > 20) reg_count = 20;
+
+      for (int i = 0; i < reg_count; i++) {
+        uint16_t word = (uint16_t(data[2*i]) << 8) | data[2*i + 1];
+        uint16_t reg  = item->start_address + i;
+
+        if (!is_interesting(reg)) {
+          if (!init) last_vals[i] = word;
+          continue;
+        }
+
+        if (!init || word != last_vals[i]) {
+          ESP_LOGI("modbus_mode", "HOLD reg %u = %u (0x%04X)", reg, word, word);
+          last_vals[i] = word;
+        }
+      }
+
+      init = true;
+      return x;
+
   # ============================================================
   # BATTERY REGISTERS (Input Registers)
   # ============================================================
+
+  - platform: modbus_controller
+    modbus_controller_id: sunhome
+    internal: true
+    id: battery_operating_mode
+    name: "Battery Operating Mode"
+    register_type: read
+    address: 5
+    value_type: U_WORD
+    accuracy_decimals: 0
+    on_value:
+      then:
+        - lambda: |-
+            int mode = (int) x;
+            std::string s;
+            switch (mode) {
+              case 1:  s = "Regular Mode"; break;
+              case 3:  s = "Export Mode"; break;
+              case 4:  s = "Import Mode"; break;
+              case 5:  s = "Import Mode"; break;
+              default: {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "Unknown (%d)", mode);
+                s = buf;
+              }
+            }
+            id(operating_mode).publish_state(s.c_str());
 
   # Register 29 (Address 28) - Battery Mode Code
   # 0=Unknown, 1=Charging, 2=Charge Topping, 3=Unknown, 4=Full, 5=Discharging
@@ -139,6 +220,19 @@ sensor:
     state_class: measurement
     icon: "mdi:battery-charging"
     value_type: S_WORD
+    filters:
+      - lambda: |-
+          if (isnan(id(battery_code).state)) {
+            return x;
+          }
+
+          int mode = (int) id(battery_code).state;
+
+          if (mode == 5) {
+            return -x; 
+          } else {
+            return x;
+          }
 
   # Register 33 (Address 32) - Battery State of Charge
   - platform: modbus_controller
@@ -350,18 +444,6 @@ sensor:
       return grid;  // Positive = import, Negative = export
     update_interval: 10s
 
-  # Battery Charge/Discharge Power (absolute value with sign indication)
-  - platform: template
-    name: "Battery Power Flow"
-    id: battery_power_flow
-    unit_of_measurement: "W"
-    device_class: power
-    state_class: measurement
-    icon: "mdi:battery-sync"
-    lambda: |-
-      return id(battery_power).state;
-    update_interval: 10s
-
   # Self-Consumption Percentage
   - platform: template
     name: "Self Consumption"
@@ -445,11 +527,36 @@ sensor:
       # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
 
+  - platform: template
+    id: grid_charge_power
+    name: "Grid Charge Power"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    internal: true
+    lambda: |-
+      if (isnan(id(grid_power).state)) return NAN;
+      float p = id(grid_power).state;
+      return p > 0.0f ? p : 0.0f;  // only positive part
+
+  # Power when discharging (>=0, magnitude of negative)
+  - platform: template
+    id: grid_discharge_power
+    name: "Grid Discharge Power"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    internal: true
+    lambda: |-
+      if (isnan(id(grid_power).state)) return NAN;
+      float p = id(grid_power).state;
+      return p < 0.0f ? -p : 0.0f; // flip sign of negative part
+
   # Grid Import Energy (only when positive)
   - platform: integration
     id: grid_import_energy
     name: "Grid Import Energy"
-    sensor: grid_power
+    sensor: grid_charge_power
     time_unit: h
     unit_of_measurement: "kWh"
     device_class: energy
@@ -461,12 +568,11 @@ sensor:
       - lambda: return max(0.0f, -x);  # Only count negative (export), make positive
       - multiply:  0.001
           
-
   # Grid Export Energy (only when negative, converted to positive)
   - platform: integration
     id: grid_export_energy
     name: "Grid Export Energy"
-    sensor: grid_power
+    sensor: grid_discharge_power
     time_unit: h
     unit_of_measurement: "kWh"
     device_class: energy
@@ -478,36 +584,60 @@ sensor:
       - lambda: return max(0.0f, x);  # Only count positive (import)
       - multiply: 0.001
 
+  # Power when charging (>=0)
+  - platform: template
+    id: battery_charge_power
+    name: "Battery Charge Power"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    internal: true
+    lambda: |-
+      if (isnan(id(battery_power).state)) return NAN;
+      float p = id(battery_power).state;
+      return p > 0.0f ? p : 0.0f;  // only positive part
+
+  # Power when discharging (>=0, magnitude of negative)
+  - platform: template
+    id: battery_discharge_power
+    name: "Battery Discharge Power"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    internal: true
+    lambda: |-
+      if (isnan(id(battery_power).state)) return NAN;
+      float p = id(battery_power).state;
+      return p < 0.0f ? -p : 0.0f; // flip sign of negative part
+
   # Battery Charge Energy (only when charging)
   - platform: integration
     id: battery_charge_energy
     name: "Battery Charge Energy"
-    sensor: battery_power
+    sensor: battery_charge_power
     time_unit: h
     unit_of_measurement: "kWh"
     device_class: energy
     state_class: total_increasing
     icon: "mdi:battery-charging"
     restore: true
-    accuracy_decimals: 3
+    accuracy_decimals: 1
     filters:
-      - lambda: return max(0.0f, x);  # Only count positive (charging)
       - multiply: 0.001
 
   # Battery Discharge Energy (only when discharging)
   - platform: integration
     id: battery_discharge_energy
     name: "Battery Discharge Energy"
-    sensor: battery_power
+    sensor: battery_discharge_power
     time_unit: h
     unit_of_measurement: "kWh"
     device_class: energy
     state_class: total_increasing
     icon: "mdi:battery-arrow-down"
     restore: true
-    accuracy_decimals: 3
+    accuracy_decimals: 1
     filters:
-      - lambda: return max(0.0f, -x);  # Only count negative (discharge), make positive
       - multiply: 0.001
   
   - platform: uptime
@@ -547,41 +677,3 @@ button:
   - platform: restart
     name: "${friendly_name} Restart"
     icon: "mdi:restart"
-
-# ============================================================
-# SELECT FOR UPDATE INTERVAL (FIXED VERSION)
-# ============================================================
-
-select:
-  - platform: template
-    name: "${friendly_name} Update Interval"
-    id: update_interval_select
-    icon: "mdi:timer"
-    optimistic: true
-    options:
-      - "2 seconds"
-      - "5 seconds"
-      - "10 seconds"
-      - "15 seconds"
-      - "30 seconds"
-    initial_option: "10 seconds"
-    restore_value: true
-    on_value:
-      then:
-        - lambda: |-
-            int interval_ms = 10000;
-            std::string selected = x;
-            
-            if (selected == "2 seconds") interval_ms = 2000;
-            else if (selected == "5 seconds") interval_ms = 5000;
-            else if (selected == "10 seconds") interval_ms = 10000;
-            else if (selected == "15 seconds") interval_ms = 15000;
-            else if (selected == "30 seconds") interval_ms = 30000;
-            
-            id(update_interval_ms) = interval_ms;
-            id(sunhome).set_update_interval(interval_ms);
-            id(self_consumption).set_update_interval(interval_ms);
-            id(battery_power_flow).set_update_interval(interval_ms);
-            id(net_power_flow).set_update_interval(interval_ms);
-            id(total_pv_power).set_update_interval(interval_ms);
-            ESP_LOGI("main", "Update interval changed to %d ms", interval_ms);
