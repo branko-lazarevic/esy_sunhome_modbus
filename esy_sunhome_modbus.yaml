@@ -101,51 +101,6 @@ text_sensor:
     hide_timestamp: true
 
 sensor:
-  - platform: modbus_controller
-    modbus_controller_id: sunhome
-    id: scan_hold_modes
-    name: "Scan HOLD 20-39"
-    address: 20
-    register_type: holding
-    register_count: 20      # 20–39
-    value_type: U_WORD
-    skip_updates: 0
-    lambda: |-
-      static uint16_t last_vals[20];
-      static bool init = false;
-
-      const uint8_t interesting[] = {
-        23, 24, 30, 32
-      };
-
-      auto is_interesting = [&](uint16_t reg) -> bool {
-        for (auto addr : interesting) {
-          if (reg == addr) return true;
-        }
-        return false;
-      };
-
-      int reg_count = data.size() / 2;
-      if (reg_count > 20) reg_count = 20;
-
-      for (int i = 0; i < reg_count; i++) {
-        uint16_t word = (uint16_t(data[2*i]) << 8) | data[2*i + 1];
-        uint16_t reg  = item->start_address + i;
-
-        if (!is_interesting(reg)) {
-          if (!init) last_vals[i] = word;
-          continue;
-        }
-
-        if (!init || word != last_vals[i]) {
-          ESP_LOGI("modbus_mode", "HOLD reg %u = %u (0x%04X)", reg, word, word);
-          last_vals[i] = word;
-        }
-      }
-
-      init = true;
-      return x;
-
   # ============================================================
   # BATTERY REGISTERS (Input Registers)
   # ============================================================
